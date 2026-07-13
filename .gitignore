@@ -1,0 +1,15 @@
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+dockerignore-*.tar
+/tmp/
+/priv/plts/
+/scripts/oracle/oracle
+/.superpowers/
+/docs/superpowers/
+/docs/prd/
+/PRD*.md
