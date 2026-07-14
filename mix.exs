@@ -54,13 +54,30 @@ defmodule Dockerignore.MixProject do
       main: "Dockerignore",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "CHANGELOG.md", "LICENSE", "NOTICE"]
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        "NOTICE",
+        "LICENSES/Apache-2.0.txt",
+        "LICENSES/BSD-3-Clause-Go.txt"
+      ]
     ]
   end
 
   defp package do
     [
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE NOTICE CHANGELOG.md),
+      files: ~w(
+          lib
+          .formatter.exs
+          mix.exs
+          README.md
+          LICENSE
+          NOTICE
+          CHANGELOG.md
+          LICENSES/Apache-2.0.txt
+          LICENSES/BSD-3-Clause-Go.txt
+        ),
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       maintainers: ["Ivan Podgurskiy"]
