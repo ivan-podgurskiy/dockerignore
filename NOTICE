@@ -1,0 +1,20 @@
+dockerignore v0.1.0
+
+Matcher semantics and adapted test data in this project derive from
+`moby/patternmatcher` v0.6.1, copyright Docker, Inc., and are licensed under
+the Apache License, Version 2.0.
+
+Upstream tag:
+https://github.com/moby/patternmatcher/tree/v0.6.1
+
+Upstream commit SHA:
+5a6d8429a19bb6948a372ff19e86fe83599a04b7
+
+The applicable upstream license text is included unmodified at
+LICENSES/Apache-2.0.txt.
+
+The dependency-free Unicode category, script, and alias data in
+lib/dockerignore/unicode15.ex is generated from the Go 1.26.0 standard library
+(Unicode 15.0.0) by scripts/oracle/generate_unicode15. Copyright 2009 The Go
+Authors. It is available under the BSD 3-Clause License; the applicable text is
+included unmodified at LICENSES/BSD-3-Clause-Go.txt.
