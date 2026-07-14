@@ -1,40 +1,96 @@
 # Dockerignore
 
-`dockerignore` parses `.dockerignore` sources and matches relative build-context
-paths using POSIX semantics. Version 0.1.0 targets the observable behavior of
-`moby/patternmatcher` v0.6.1, including its `ignorefile` preprocessing.
+[![CI](https://github.com/ivan-podgurskiy/dockerignore/actions/workflows/ci.yml/badge.svg)](https://github.com/ivan-podgurskiy/dockerignore/actions/workflows/ci.yml)
+[![Hex pm](https://img.shields.io/hexpm/v/dockerignore.svg)](https://hex.pm/packages/dockerignore)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The compatibility boundary is the same source and the same relative,
-slash-delimited path producing the same kept or ignored decision. The upstream
-v0.6.1 implementation is the contract for supported inputs; this library does
-not copy Go's internal mutability or platform-dependent path behavior.
+Correct `.dockerignore` semantics for Elixir, compatible with
+[`moby/patternmatcher`](https://github.com/moby/patternmatcher) v0.6.1.
 
-Regexp-mode compatibility is pinned to the Go 1.26.0 RE2 controller. The
-package embeds compact Unicode 15.0.0 category, script, and alias tables
-generated from that controller, so applications do not need Go or a runtime
-regular-expression dependency.
+`Dockerignore` parses `.dockerignore` content and answers whether a relative
+Docker build-context path should be kept or ignored. It implements ordered
+rules, negation, parent-directory matching, recursive `**` patterns, Docker's
+ignore-file preprocessing, and source-aware validation errors.
 
-See the exact [moby/patternmatcher v0.6.1 tag](https://github.com/moby/patternmatcher/tree/v0.6.1)
-and this project's [v0.6.1 conformance test](https://github.com/ivan-podgurskiy/dockerignore/blob/main/test/patternmatcher_conformance_test.exs).
+Use it when an Elixir application needs to make the same path-selection
+decisions as Docker's PatternMatcher, including:
+
+- build-context archive generators and remote builders;
+- CI pipelines, deployment tools, and repository scanners;
+- developer tools that preview or validate Docker build contexts;
+- AI coding agents and MCP servers that must avoid ignored build artifacts; and
+- any service that accepts `.dockerignore` content and evaluates paths without
+  shelling out to Docker or Go.
+
+Compile a source once and reuse the immutable matcher across processes. The
+core package does not walk the filesystem and has zero runtime dependencies.
+
+## Why not glob?
+
+`.dockerignore` is an ordered rule language, not a list of independent glob
+patterns. A generic matcher can produce a different build context from Docker.
+
+| Feature | Generic glob | `Dockerignore` |
+| --- | --- | --- |
+| Comments, blank lines, whitespace, and path cleaning | Usually caller-defined | PatternMatcher-compatible preprocessing |
+| Negation with `!` | Usually unavailable | Ordered exclusion and re-inclusion |
+| Parent-directory decisions | Pattern-only | Matching parents affect descendants |
+| Recursive `**` | Library-specific | `moby/patternmatcher` v0.6.1 behavior |
+| Invalid patterns | Often fail during matching or silently miss | Validated during compilation with source line context |
+| Compatibility evidence | Implementation-specific | Differentially verified against the pinned Go matcher |
+
+This matters for tooling: an approximate matcher can send unnecessary build
+artifacts, omit required files, or report a context that disagrees with Docker.
 
 ## Installation
 
-Add `dockerignore` to your dependencies:
+Add `dockerignore` to your dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:dockerignore, "~> 0.1.0"}
+    {:dockerignore, "~> 0.1"}
   ]
 end
 ```
 
-The package has zero runtime dependencies. Its development and test tooling is
-not required by applications using it.
+To use the repository version before or between Hex releases:
+
+```elixir
+{:dockerignore, git: "https://github.com/ivan-podgurskiy/dockerignore.git"}
+```
+
+## Quick start
+
+```elixir
+source = """
+_build/
+*.log
+!important.log
+"""
+
+matcher = Dockerignore.compile!(source)
+
+Dockerignore.ignored?(matcher, "_build/prod/lib/app.beam")
+#=> true
+
+Dockerignore.ignored?(matcher, "debug.log")
+#=> true
+
+Dockerignore.ignored?(matcher, "important.log")
+#=> false
+
+Dockerignore.filter(matcher, ["debug.log", "README.md", "important.log"])
+#=> ["README.md", "important.log"]
+
+Dockerignore.explain(matcher, "important.log")
+#=> {:kept, %Dockerignore.Pattern{source: "!important.log", line: 3, ...}}
+```
+
+All paths passed to the matcher are relative to the Docker build-context root
+and use `/` as the separator.
 
 ## Public API
-
-All examples use paths relative to the Docker build-context root.
 
 ### Parse
 
@@ -57,8 +113,8 @@ length(patterns)
 ### Compile
 
 `compile/1` parses the source and builds an immutable matcher. `compile!/1`
-returns the matcher or raises `Dockerignore.Error`. Compile once and share the
-matcher between processes; matching does not mutate it or lazily add state.
+returns the matcher or raises `Dockerignore.Error`. Matching does not mutate the
+matcher or lazily add state, so it can be shared between processes.
 
 ```elixir
 {:ok, matcher} = Dockerignore.compile(source)
@@ -118,7 +174,7 @@ The possible results are `{:ignored, pattern}`, `{:kept, pattern}`, and
 line, one-based line number, cleaned pattern, negation flag, match type, and
 generated regular-expression source when applicable.
 
-## Paths And Errors
+## Paths and errors
 
 Matching paths are relative to the build-context root and must use `/` as the
 separator. Repeated separators, `.` segments, `..` segments, and trailing
@@ -126,10 +182,10 @@ separators are cleaned with host-independent POSIX rules. The library does not
 walk the filesystem, resolve symlinks, expand paths, or consult the host OS.
 The cleaned path `.` is always kept.
 
-Patterns are processed in source order. Normal rules ignore matching paths; when
-a normal rule matches an ancestor, its descendants are ignored too. A later `!`
-rule can re-include a matching path, including a path below a parent rule,
-following the upstream matcher behavior.
+Patterns are processed in source order. Normal rules ignore matching paths;
+when a normal rule matches an ancestor, its descendants are ignored too. A
+later `!` rule can re-include a matching path, including a path below a parent
+rule, following the upstream matcher behavior.
 
 Invalid content is rejected before matching and retains original source line
 context, including comments and blank lines:
@@ -146,35 +202,65 @@ Dockerignore.compile!("ok\n[")
 # raises Dockerignore.Error with the same line context
 ```
 
-## Dockerignore And Gitignore
+## Compatibility and verification
 
-`dockerignore` is intentionally not a `.gitignore` implementation. The table
-shows the important dialect differences for this library and Git's pattern
-rules:
+Version 0.1.0 targets the observable behavior of
+[`moby/patternmatcher` v0.6.1](https://github.com/moby/patternmatcher/tree/v0.6.1),
+including its `ignorefile` preprocessing. The compatibility boundary is the
+same source and the same relative, slash-delimited path producing the same kept
+or ignored decision.
 
-| Rule | `.dockerignore` | `.gitignore` |
-| --- | --- | --- |
-| Root anchoring | Patterns are relative to the build-context root; a bare `logs` rule matches root `logs` and its descendants, not `src/logs`. | A pattern without `/` can match a name at any directory level; `logs` can match `src/logs`. |
-| `*` | Matches characters within a path segment and never crosses `/`; `*.log` matches root-level log paths in this dialect. | Also does not cross `/`, but a pattern without `/` is applied at every directory level. |
-| `**` | Uses the v0.6.1 recursive wildcard behavior; `**/*.log` matches `app.log` and `logs/app.log`. | Has Git-specific recursive wildcard forms and anchoring rules; its behavior is not a compatibility target here. |
-| Parent matching | A matching parent directory affects descendants, and a later `!` rule can re-include a matching descendant. | An ignored parent prevents Git from traversing to re-include a child with `!`. |
-| `!` re-inclusion | Ordered exclusion rules change state in source order; a lone `!` is invalid. | Negates a pattern, subject to Git's directory traversal and parent-exclusion rules. |
+Regexp-mode behavior is pinned to the Go 1.26.0 RE2 controller. The package
+embeds Unicode 15.0.0 category, script, and alias tables generated from that
+controller, so applications do not need Go or a runtime regular-expression
+dependency.
+
+The conformance suite includes the upstream decision and error cases plus
+differential edge cases. The development oracle currently verifies **140 match
+decisions and 24 compile errors with zero mismatches** against the pinned Go
+implementation. See the
+[conformance test](test/patternmatcher_conformance_test.exs) and
+[oracle](scripts/oracle/check.exs).
+
+The upstream implementation is the contract for supported inputs. This library
+does not copy Go's internal mutability or platform-dependent path behavior.
+
+## Roadmap
+
+- Publish and maintain the v0.1 line on Hex and HexDocs.
+- Evaluate future `moby/patternmatcher` releases as explicit compatibility
+  targets before changing matcher semantics.
+- Expand differential fixtures when new upstream edge cases are identified.
+- Evaluate optional helpers for Dockerfile-specific ignore discovery and build
+  context assembly while keeping the core matcher independent from filesystem
+  I/O.
+- Add repeatable performance and memory benchmarks for representative build
+  contexts.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history. Version 0.1.0 introduces
+the parser, immutable matcher, public decision APIs, bounded RE2-compatible
+engine, embedded Unicode tables, and the pinned PatternMatcher conformance
+suite.
 
 ## Non-goals
 
 Version 0.1 does not:
 
-* walk a filesystem or construct a Docker build-context archive;
-* reproduce Docker CLI rules that always transmit special files;
-* discover per-Dockerfile ignore files;
-* support Windows separator semantics;
-* provide `.gitignore` compatibility; or
-* publish the package to Hex as part of this implementation cycle.
+- walk a filesystem or construct a Docker build-context archive;
+- reproduce Docker CLI rules that always transmit special files;
+- discover per-Dockerfile ignore files;
+- support Windows separator semantics; or
+- claim compatibility with PatternMatcher versions other than v0.6.1.
 
-## License And Attribution
+## License and attribution
 
 The package code is MIT licensed. Matcher semantics and adapted conformance
 data derive from Docker's `moby/patternmatcher` v0.6.1 and are attributed under
-Apache-2.0 in [NOTICE](NOTICE) and [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
+Apache-2.0 in [NOTICE](NOTICE) and
+[LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
+
 The embedded Go 1.26.0 Unicode 15.0.0 tables are attributed under BSD-3-Clause
-in [NOTICE](NOTICE) and [LICENSES/BSD-3-Clause-Go.txt](LICENSES/BSD-3-Clause-Go.txt).
+in [NOTICE](NOTICE) and
+[LICENSES/BSD-3-Clause-Go.txt](LICENSES/BSD-3-Clause-Go.txt).
