@@ -4,16 +4,16 @@
 [![Hex pm](https://img.shields.io/hexpm/v/dockerignore.svg)](https://hex.pm/packages/dockerignore)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Correct `.dockerignore` semantics for Elixir, compatible with
-[`moby/patternmatcher`](https://github.com/moby/patternmatcher) v0.6.1.
+Parse and match `.dockerignore` files in Elixir with Docker-compatible
+semantics.
 
-`Dockerignore` parses `.dockerignore` content and answers whether a relative
-Docker build-context path should be kept or ignored. It implements ordered
-rules, negation, parent-directory matching, recursive `**` patterns, Docker's
-ignore-file preprocessing, and source-aware validation errors.
+`Dockerignore` answers whether a relative path should be kept in or excluded
+from a Docker build context. It implements ordered rules, negation,
+parent-directory matching, recursive `**` patterns, Docker's ignore-file
+preprocessing, and source-aware validation errors.
 
-Use it when an Elixir application needs to make the same path-selection
-decisions as Docker's PatternMatcher, including:
+Use it when an Elixir application needs to make the same `.dockerignore`
+path-selection decisions as Docker tooling, including:
 
 - build-context archive generators and remote builders;
 - CI pipelines, deployment tools, and repository scanners;
@@ -24,6 +24,10 @@ decisions as Docker's PatternMatcher, including:
 
 Compile a source once and reuse the immutable matcher across processes. The
 core package does not walk the filesystem and has zero runtime dependencies.
+
+Matcher behavior is differentially verified against
+[`moby/patternmatcher`](https://github.com/moby/patternmatcher) v0.6.1. Moby,
+Docker, and Go are not runtime dependencies.
 
 ## Why not glob?
 
