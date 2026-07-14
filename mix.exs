@@ -46,7 +46,7 @@ defmodule Dockerignore.MixProject do
   end
 
   defp description do
-    "Correct .dockerignore semantics for Elixir, pinned to moby/patternmatcher."
+    "Parse and match .dockerignore files in Elixir with Docker-compatible semantics."
   end
 
   defp docs do
